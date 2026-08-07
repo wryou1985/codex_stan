@@ -66,3 +66,11 @@ jobs:
       - name: Run smoke test
         run: |
           python scripts/smoke_test_cmdstanpy.py
+
+      - name: Upload smoke test CSV outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmdstanpy-smoke-test-csv
+          path: results/*.csv
+          if-no-files-found: warn
