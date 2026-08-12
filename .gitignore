@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.venv/
+stan_env/
+.cmdstan/
+.pytest_cache/
+.mypy_cache/
+
+# Generated analysis configuration contains machine-local absolute paths.
+Stan_inputs/config_*.json
+
+# Mathematica integration caches are large and are not needed by the Python CI path.
+Stan_inputs/*.ma
+
+# Generated Stan sources, executables, draws, and summaries.
+Stan_outputs/
+results/
+*.csv
+*.draws
+*.hpp
+*.o
+*.d
+*.exe
+*.log
+
