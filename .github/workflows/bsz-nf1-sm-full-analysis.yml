@@ -1,0 +1,72 @@
+name: BSZ nf1 SM full analysis
+
+"on":
+  workflow_dispatch:
+
+jobs:
+  full-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    env:
+      CMDSTAN_VERSION: "2.36.0"
+      MPLCONFIGDIR: /tmp/matplotlib
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential make
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Cache CmdStan
+        id: cache-cmdstan
+        uses: actions/cache@v4
+        with:
+          path: ~/.cmdstan
+          key: ${{ runner.os }}-cmdstan-${{ env.CMDSTAN_VERSION }}
+
+      - name: Install CmdStan if missing
+        if: steps.cache-cmdstan.outputs.cache-hit != 'true'
+        run: |
+          python - <<'PY'
+          import os
+          import cmdstanpy
+
+          cmdstanpy.install_cmdstan(
+              version=os.environ["CMDSTAN_VERSION"],
+              cores=2,
+              progress=True,
+          )
+          PY
+
+      - name: Check CmdStan
+        run: python -c "import cmdstanpy; print(cmdstanpy.cmdstan_path())"
+
+      - name: Run BSZ nf1 SM full analysis
+        run: python scripts/run_full_bsz_nf1_sm.py
+
+      - name: Upload final analysis CSV
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bsz-nf1-sm-full-analysis
+          path: |
+            Stan_outputs/StanFit_CasePDG-noUB_SM_BSZnf1_*.csv
+            Stan_outputs/CasePDG-noUB_SM_BSZnf1/*.stan
+            Stan_outputs/CasePDG-noUB_SM_BSZnf1/*_param.json
+            Stan_outputs/CasePDG-noUB_SM_BSZnf1/standata_*.json
+            Stan_outputs/CasePDG-noUB_SM_BSZnf1/**/*-stdout.txt
+          if-no-files-found: warn
+
