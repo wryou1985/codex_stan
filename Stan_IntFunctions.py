@@ -403,7 +403,16 @@ def monomial_to_stan(monomial: Monomial) -> str:
     return "*".join(factors)
 
 
-def polynomial_to_stan(poly: Polynomial, *, cut_control: float) -> str:
+def balanced_sum(terms: list[str]) -> str:
+    if not terms:
+        return "0"
+    if len(terms) == 1:
+        return terms[0]
+    midpoint = len(terms) // 2
+    return f"({balanced_sum(terms[:midpoint])} + {balanced_sum(terms[midpoint:])})"
+
+
+def polynomial_to_stan(poly: Polynomial, *, cut_control: float, balanced: bool = False) -> str:
     if not poly:
         return "0"
     max_coeff = max(abs(coeff) for coeff in poly.values())
@@ -411,6 +420,16 @@ def polynomial_to_stan(poly: Polynomial, *, cut_control: float) -> str:
     terms = [(monomial, coeff) for monomial, coeff in sorted(poly.items()) if abs(coeff) >= threshold]
     if not terms:
         return "0"
+
+    if balanced:
+        signed_terms: list[str] = []
+        for monomial, coeff in terms:
+            body = f"{coeff:.17g}"
+            mono = monomial_to_stan(monomial)
+            if mono:
+                body += "*" + mono
+            signed_terms.append(f"({body})" if coeff < 0 else body)
+        return balanced_sum(signed_terms)
 
     pieces: list[str] = []
     for monomial, coeff in terms:

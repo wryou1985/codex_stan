@@ -43,6 +43,8 @@ OUTPUT_PREFIXES = {
     "rawBelleDst_chi_func": "RawBelleDstChi",
 }
 
+UB_ASSIGNMENT_RE = re.compile(r"^(UBfunc\[\d+\])\s*=\s*(.*);\s*$")
+
 
 @dataclass(frozen=True)
 class FitFunctionSet:
@@ -182,7 +184,7 @@ def _simplify_obs(poly_store: dict[str, Polynomial], cache: FitFunctionSet, data
     poly = poly_store[_obs_key(dataset, dist, bin_index)]
     if scale != 1.0:
         poly = scale_poly(poly, scale)
-    return polynomial_to_stan(poly, cut_control=cache.cut_control)
+    return polynomial_to_stan(poly, cut_control=cache.cut_control, balanced=cache.ff_model == "HQET")
 
 
 def _sum_obs(poly_store: dict[str, Polynomial], cache: FitFunctionSet, items: list[tuple[str, str, int | None, float]]) -> str:
@@ -192,7 +194,28 @@ def _sum_obs(poly_store: dict[str, Polynomial], cache: FitFunctionSet, items: li
         if scale != 1.0:
             poly = scale_poly(poly, scale)
         total = add_poly(total, poly)
-    return polynomial_to_stan(total, cut_control=cache.cut_control)
+    return polynomial_to_stan(total, cut_control=cache.cut_control, balanced=cache.ff_model == "HQET")
+
+
+def _simplify_ub_body(cache: FitFunctionSet) -> list[str]:
+    if cache.ff_model != "HQET" or not cache.ub_body:
+        return list(cache.ub_body)
+
+    lines: list[str] = []
+    for line in cache.ub_body:
+        match = UB_ASSIGNMENT_RE.match(line.strip())
+        if not match:
+            raise ValueError(f"Unsupported UBfunc assignment line: {line}")
+        lhs, expr = match.groups()
+        poly = simplify_int_poly(
+            expr,
+            ff_model=cache.ff_model,
+            ff_nf=cache.ff_nf,
+            np_model=cache.np_model,
+        )
+        simplified = polynomial_to_stan(poly, cut_control=cache.cut_control, balanced=True)
+        lines.append(f"{lhs}={simplified};")
+    return lines
 
 
 def apply_intfunctions(cache: FitFunctionSet, *, input_directory: Path) -> FitFunctionSet:
@@ -275,6 +298,7 @@ def apply_intfunctions(cache: FitFunctionSet, *, input_directory: Path) -> FitFu
         cache,
         function_bodies=function_bodies,
         output_bodies=output_bodies,
+        ub_body=_simplify_ub_body(cache),
         source=f"{cache.source}; IntFunctions_{cache.ff_model}",
     )
 
